@@ -1,16 +1,21 @@
 class UserResponseRegister {
-  String email = "";
-  String password = "";
   String id = "";
+  String name = "";
+  String email = "";
 
+  UserResponseRegister(
+      this.id,
+      this.name,
+      this.email,
+      );
 
-  UserResponseRegister(this.email,this.password,this.id);
   UserResponseRegister.buildDefault();
+
   factory UserResponseRegister.fromJson(Map<String, dynamic> json) {
     return UserResponseRegister(
-      json['email'],
-      json['password'],
-      json['id'],
+      json['id'] ?? "",
+      json['name'] ?? "",
+      json['email'] ?? "",
     );
   }
 }

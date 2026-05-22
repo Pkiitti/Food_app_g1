@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Basket = require('../models/Basket');
 const Food = require('../models/Food');
-
+const Order = require('../models/Order');
 exports.addToBasket = async (req, res) => {
     const { foodId } = req.body;
     const token = req.header('Authorization')?.replace('Bearer ', '');
@@ -176,55 +176,84 @@ exports.getBasket = async (req, res) => {
   };
 
   exports.checkoutBasket = async (req, res) => {
-    const { basketId } = req.body; // Lấy basketId từ body request
-    const token = req.header('Authorization')?.replace('Bearer ', ''); // Lấy token từ header
-  
-    // Kiểm tra xem token có được truyền không
-    if (!token) {
+  const { basketId } = req.body;
+  const token = req.header('Authorization')?.replace('Bearer ', '');
+
+  if (!token) {
+    return res.status(401).json({
+      statusCode: 401,
+      message: 'Token không tồn tại',
+    });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId;
+
+    const userExists = await User.findById(userId);
+    if (!userExists) {
+      return res.status(400).json({
+        statusCode: 400,
+        message: 'Người dùng không tồn tại',
+      });
+    }
+
+    const basket = await Basket.findOne({ _id: basketId, user: userId });
+    if (!basket) {
+      return res.status(404).json({
+        statusCode: 404,
+        message: 'Giỏ hàng không tồn tại hoặc không thuộc về người dùng',
+      });
+    }
+
+    if (!basket.items || basket.items.length === 0) {
+      return res.status(400).json({
+        statusCode: 400,
+        message: 'Giỏ hàng đang trống',
+      });
+    }
+
+    const orderItems = basket.items.map((item) => ({
+      foodId: item._id,
+      title: item.title,
+      description: item.description,
+      price: item.price,
+      image: item.image,
+    }));
+
+    const totalPrice = orderItems.reduce((sum, item) => {
+      return sum + Number(item.price || 0);
+    }, 0);
+
+    const newOrder = new Order({
+      user: userId,
+      items: orderItems,
+      totalPrice,
+      status: 'Pending',
+    });
+
+    await newOrder.save();
+
+    await Basket.findByIdAndDelete(basketId);
+
+    return res.status(200).json({
+      status: true,
+      message: 'Checkout thành công',
+      order: newOrder,
+    });
+  } catch (err) {
+    console.error(err.message);
+
+    if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
       return res.status(401).json({
         statusCode: 401,
-        message: 'Token không tồn tại',
+        message: 'Token không hợp lệ hoặc đã hết hạn',
       });
     }
-  
-    try {
-      // Giải mã token để lấy userId
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const userId = decoded.userId;
-  
-      // Kiểm tra xem người dùng có tồn tại không
-      const userExists = await User.findById(userId);
-      if (!userExists) {
-        return res.status(400).json({
-          statusCode: 400,
-          message: 'Người dùng không tồn tại',
-        });
-      }
-  
-      // Tìm giỏ hàng dựa trên basketId và userId
-      const basket = await Basket.findOne({ _id: basketId, user: userId });
-      if (!basket) {
-        return res.status(404).json({
-          statusCode: 404,
-          message: 'Giỏ hàng không tồn tại hoặc không thuộc về người dùng',
-        });
-      }
-  
-      // Xóa giỏ hàng sau khi checkout
-      await Basket.findByIdAndDelete(basketId);
-  
-      // Trả về response sau khi giỏ hàng được xóa thành công
-      return res.status(200).json({
-        message: 'Checkout thành công',
-      });
-    } catch (err) {
-      console.error(err.message);
-      if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
-        return res.status(401).json({ statusCode: 401, message: 'Token không hợp lệ hoặc đã hết hạn' });
-      }
-      res.status(500).json({
-        statusCode: 500,
-        message: 'Lỗi máy chủ',
-      });
-    }
-  };
+
+    return res.status(500).json({
+      statusCode: 500,
+      message: 'Lỗi máy chủ',
+    });
+  }
+};

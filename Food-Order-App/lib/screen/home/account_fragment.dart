@@ -4,13 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:food_app_project/model/error_response.dart';
 
-import '../../assets/images.dart';
 import '../../handle_api/handle_api.dart';
 import '../../model/change_account/change_account_request.dart';
 import '../../model/change_account/change_account_response.dart';
+import '../../util/app_colors.dart';
 import '../../util/global.dart';
 import '../../util/share_preferences.dart';
 import '../../util/show_loading_dialog.dart';
+import '../order/order_history_page.dart';
 import 'home_page.dart';
 
 class AccountDetail extends StatefulWidget {
@@ -24,38 +25,52 @@ class _AccountDetailState extends State<AccountDetail> {
   TextEditingController changeOldPasswordController = TextEditingController();
   TextEditingController changeNewPasswordController = TextEditingController();
   TextEditingController changeConfirmNewPasswordController =
-      TextEditingController();
+  TextEditingController();
+
   String changeOldPassword = "";
   String changeNewPassword = "";
   String changeConfirmNewPassword = "";
+
   bool isShowChangeOldPassword = false;
   bool isShowChangeNewPassword = false;
   bool isShowChangeConfirmNewPassword = false;
+
   String email = "";
+  String name = "";
 
   @override
   void initState() {
-    getUserName();
+    getUserInfo();
     super.initState();
   }
 
-  Future<void> getUserName() async {
-    email = await ConfigSharedPreferences()
+  Future<void> getUserInfo() async {
+    final savedEmail = await ConfigSharedPreferences()
         .getStringValue(SharedData.EMAIL.toString(), defaultValue: "");
+
+    final savedName = await ConfigSharedPreferences()
+        .getStringValue(SharedData.NAME.toString(), defaultValue: "");
+
     setState(() {
-      email;
+      email = savedEmail;
+      name = savedName.isNotEmpty
+          ? savedName
+          : savedEmail.isNotEmpty
+          ? savedEmail.split("@").first
+          : "Foodie";
     });
   }
 
-  /// call api change account
   Future<void> changeAccountApi(
       ChangeAccountRequest changeAccountRequest) async {
     setState(() {
       IsShowDialog().showLoadingDialog(context);
     });
+
     ErrorResponse? errorResponse;
     ChangeAccountResponse changeAccountResponse;
     Map<String, dynamic>? body;
+
     try {
       body = await HttpHelper.invokeHttp(
         Uri.parse("${Global.apiAddress}/api/auth/changePassword"),
@@ -63,401 +78,495 @@ class _AccountDetailState extends State<AccountDetail> {
         headers: null,
         body: const JsonEncoder().convert(changeAccountRequest.toBodyRequest()),
       );
+
       if (body == null) return;
 
       if (body.containsKey('statusCode')) {
         errorResponse = ErrorResponse.fromJson(body);
-        setState(() {
+
+        if (context.mounted) {
           Navigator.of(context).pop();
-          Fluttertoast.showToast(
-            msg: errorResponse!.errorMessage,
-            toastLength: Toast.LENGTH_SHORT,
-            gravity: ToastGravity.BOTTOM,
-            timeInSecForIosWeb: 3,
-            backgroundColor: Colors.red,
-            textColor: Colors.white,
-            fontSize: 16,
-          );
-        });
+        }
+
+        Fluttertoast.showToast(
+          msg: errorResponse.errorMessage,
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          timeInSecForIosWeb: 3,
+          backgroundColor: AppColors.danger,
+          textColor: Colors.white,
+          fontSize: 16,
+        );
       } else {
         changeAccountResponse = ChangeAccountResponse.fromJson(body);
-        setState(() {
+
+        if (context.mounted) {
           Navigator.of(context).pop();
-          Fluttertoast.showToast(
-              msg: changeAccountResponse.message,
-              toastLength: Toast.LENGTH_SHORT,
-              gravity: ToastGravity.BOTTOM,
-              timeInSecForIosWeb: 3,
-              backgroundColor: Colors.green,
-              textColor: Colors.white,
-              fontSize: 16);
-          Navigator.pushNamedAndRemoveUntil(
-              context, HomePage.routeName, (Route<dynamic> route) => false);
-        });
+        }
+
+        Fluttertoast.showToast(
+          msg: changeAccountResponse.message,
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          timeInSecForIosWeb: 3,
+          backgroundColor: AppColors.primary,
+          textColor: Colors.white,
+          fontSize: 16,
+        );
+
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          HomePage.routeName,
+              (Route<dynamic> route) => false,
+        );
       }
     } catch (error) {
       debugPrint("Fail to change account $error");
-      setState(() {
+
+      if (context.mounted) {
         Navigator.of(context).pop();
-        Fluttertoast.showToast(
-            msg: 'Lỗi Server',
-            toastLength: Toast.LENGTH_SHORT,
-            gravity: ToastGravity.BOTTOM,
-            timeInSecForIosWeb: 3,
-            backgroundColor: Colors.red,
-            textColor: Colors.white,
-            fontSize: 16);
-      });
+      }
+
+      Fluttertoast.showToast(
+        msg: 'Server error',
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        timeInSecForIosWeb: 3,
+        backgroundColor: AppColors.danger,
+        textColor: Colors.white,
+        fontSize: 16,
+      );
+
       rethrow;
     }
+
     return;
+  }
+
+  void handleChangePassword() {
+    if (!Global.isAvailableToClick()) return;
+
+    if (email.isEmpty ||
+        changeOldPassword.isEmpty ||
+        changeNewPassword.isEmpty ||
+        changeConfirmNewPassword.isEmpty) {
+      Fluttertoast.showToast(
+        msg: "Please enter enough information!",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        timeInSecForIosWeb: 3,
+        backgroundColor: AppColors.danger,
+        textColor: Colors.white,
+        fontSize: 16,
+      );
+      return;
+    }
+
+    if (changeNewPassword != changeConfirmNewPassword) {
+      Fluttertoast.showToast(
+        msg: "Password and confirm password do not match!",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        timeInSecForIosWeb: 3,
+        backgroundColor: AppColors.danger,
+        textColor: Colors.white,
+        fontSize: 16,
+      );
+      return;
+    }
+
+    ChangeAccountRequest changeAccountRequest = ChangeAccountRequest(
+      email,
+      changeOldPassword,
+      changeNewPassword,
+    );
+
+    changeAccountApi(changeAccountRequest);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       child: Column(
         children: [
-          changeEmailTextField(),
-          changeOldPasswordTextField(),
-          changeNewPasswordTextField(),
-          changeConfirmNewPasswordTextField(),
-
-          /// button continue
-          SizedBox(
-            height: 50,
-            width: MediaQuery.of(context).size.width,
-            child: InkWell(
-              onTap: () {
-                if (Global.isAvailableToClick()) {
-                  if (email.isNotEmpty &&
-                      changeOldPassword.isNotEmpty &&
-                      changeNewPassword.isNotEmpty &&
-                      changeConfirmNewPassword.isNotEmpty) {
-                    if (changeNewPassword == changeConfirmNewPassword) {
-                      ChangeAccountRequest changeAccountRequest =
-                          ChangeAccountRequest(
-                        email,
-                        changeOldPassword,
-                        changeNewPassword,
-                      );
-                      changeAccountApi(changeAccountRequest);
-                    } else {
-                      Fluttertoast.showToast(
-                          msg: "Password and Confirm password do not match!",
-                          toastLength: Toast.LENGTH_SHORT,
-                          gravity: ToastGravity.BOTTOM,
-                          timeInSecForIosWeb: 3,
-                          backgroundColor: Colors.red,
-                          textColor: Colors.white,
-                          fontSize: 16);
-                    }
-                  } else {
-                    Fluttertoast.showToast(
-                        msg: "Please enter enough information!",
-                        toastLength: Toast.LENGTH_SHORT,
-                        gravity: ToastGravity.BOTTOM,
-                        timeInSecForIosWeb: 3,
-                        backgroundColor: Colors.red,
-                        textColor: Colors.white,
-                        fontSize: 16);
-                  }
-                }
-              },
-              child: Container(
-                decoration: BoxDecoration(
-                    color: Colors.green,
-                    borderRadius: BorderRadius.circular(8)),
-                alignment: Alignment.center,
-                child: const Text(
-                  "Change",
-                  style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(
-            height: 30,
-          ),
-
-          /// social media
-          SizedBox(
-              width: MediaQuery.of(context).size.width,
-              child:
-                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Container(
-                    height: 40,
-                    width: 40,
-                    padding: const EdgeInsets.all(10),
-                    decoration: const BoxDecoration(
-                        color: Color(0xFFF5F6F9), shape: BoxShape.circle),
-                    child: const Icon(
-                      Icons.facebook_outlined,
-                      color: Colors.blue,
-                    )),
-                Container(
-                    height: 40,
-                    width: 40,
-                    padding: const EdgeInsets.all(10),
-                    decoration: const BoxDecoration(
-                        color: Color(0xFFF5F6F9), shape: BoxShape.circle),
-                    child: Image.asset(ImageAssets.icGoogle)),
-                Container(
-                    height: 40,
-                    width: 40,
-                    padding: const EdgeInsets.all(10),
-                    decoration: const BoxDecoration(
-                        color: Color(0xFFF5F6F9), shape: BoxShape.circle),
-                    child: Image.asset(ImageAssets.icTwitter))
-              ])),
+          profileCard(),
+          const SizedBox(height: 18),
+          quickActionsCard(),
+          const SizedBox(height: 18),
+          changePasswordCard(),
         ],
       ),
     );
   }
 
-  /// text field change email
-  Widget changeEmailTextField() {
+  Widget profileCard() {
     return Container(
       width: double.infinity,
-      height: 50,
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey),
-        borderRadius: BorderRadius.circular(6),
+        gradient: const LinearGradient(
+          colors: [
+            AppColors.primary,
+            AppColors.primaryDark,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withOpacity(0.25),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.only(left: 16, right: 10),
-      child: TextField(
-        keyboardType: TextInputType.text,
-        cursorColor: Colors.grey,
-        decoration: InputDecoration(
-            hintText: email,
-            hintStyle: const TextStyle(
-              fontFamily: 'NunitoSans',
-              fontStyle: FontStyle.normal,
-              fontWeight: FontWeight.w400,
-              fontSize: 14,
+      child: Row(
+        children: [
+          Container(
+            width: 74,
+            height: 74,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.18),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white.withOpacity(0.35),
+                width: 1.5,
+              ),
             ),
-            border: InputBorder.none,
-            focusedBorder: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            counterText: '',
-            suffixIcon: const Icon(Icons.email_outlined)),
-        readOnly: true,
-        style: const TextStyle(
-            color: Colors.black,
-            fontFamily: 'NunitoSans',
-            fontSize: 14,
-            fontWeight: FontWeight.w400,
-            height: 1.9),
+            child: Center(
+              child: Text(
+                name.isNotEmpty ? name[0].toUpperCase() : "F",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 34,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Welcome back",
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  email,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  /// text field change old password
-  Widget changeOldPasswordTextField() {
+  Widget quickActionsCard() {
     return Container(
       width: double.infinity,
-      height: 50,
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey),
-        borderRadius: BorderRadius.circular(6),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.only(left: 16, right: 10),
-      child: TextField(
-        obscureText: !isShowChangeOldPassword,
-        controller: changeOldPasswordController,
-        keyboardType: TextInputType.text,
-        cursorColor: Colors.grey,
-        decoration: InputDecoration(
-          hintText: 'Enter Your Old Password',
-          hintStyle: const TextStyle(
-            fontFamily: 'NunitoSans',
-            fontStyle: FontStyle.normal,
-            fontWeight: FontWeight.w400,
-            fontSize: 14,
-          ),
-          border: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          counterText: '',
-          suffixIcon: SizedBox(
-            width: 80,
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      isShowChangeOldPassword = !isShowChangeOldPassword;
-                    });
-                  },
-                  child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: (isShowChangeOldPassword == true)
-                          ? const Icon(Icons.visibility, color: Colors.green)
-                          : const Icon(
-                              Icons.visibility_off,
-                              color: Colors.green,
-                            )),
+      child: Column(
+        children: [
+          menuTile(
+            icon: Icons.receipt_long_rounded,
+            title: "Order History",
+            subtitle: "View your previous orders",
+            iconColor: AppColors.primary,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const OrderHistoryPage(),
                 ),
-                const SizedBox(width: 20),
-                const Icon(Icons.lock_clock),
-              ],
-            ),
+              );
+            },
           ),
-        ),
-        onChanged: (value) {
-          setState(() {
-            changeOldPassword = value;
-          });
-        },
-        style: const TextStyle(
-            color: Colors.black,
-            fontFamily: 'NunitoSans',
-            fontSize: 14,
-            fontWeight: FontWeight.w400,
-            height: 1.9),
+          const Divider(height: 18),
+          menuTile(
+            icon: Icons.email_rounded,
+            title: "Email",
+            subtitle: email.isNotEmpty ? email : "No email",
+            iconColor: AppColors.secondary,
+            onTap: () {},
+          ),
+        ],
       ),
     );
   }
 
-  /// text field change new password
-  Widget changeNewPasswordTextField() {
-    return Container(
-      width: double.infinity,
-      height: 50,
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.only(left: 16, right: 10),
-      child: TextField(
-        obscureText: !isShowChangeNewPassword,
-        controller: changeNewPasswordController,
-        keyboardType: TextInputType.text,
-        cursorColor: Colors.grey,
-        decoration: InputDecoration(
-          hintText: 'Enter Your New Password',
-          hintStyle: const TextStyle(
-            fontFamily: 'NunitoSans',
-            fontStyle: FontStyle.normal,
-            fontWeight: FontWeight.w400,
-            fontSize: 14,
-          ),
-          border: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          counterText: '',
-          suffixIcon: SizedBox(
-            width: 80,
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      isShowChangeNewPassword = !isShowChangeNewPassword;
-                    });
-                  },
-                  child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: (isShowChangeNewPassword == true)
-                          ? const Icon(Icons.visibility, color: Colors.green)
-                          : const Icon(
-                              Icons.visibility_off,
-                              color: Colors.green,
-                            )),
-                ),
-                const SizedBox(width: 20),
-                const Icon(Icons.lock_clock),
-              ],
+  Widget menuTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color iconColor,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                icon,
+                color: iconColor,
+              ),
             ),
-          ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: AppColors.textDark,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.textGrey,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: AppColors.textGrey,
+              size: 15,
+            ),
+          ],
         ),
-        onChanged: (value) {
-          setState(() {
-            changeNewPassword = value;
-          });
-        },
-        style: const TextStyle(
-            color: Colors.black,
-            fontFamily: 'NunitoSans',
-            fontSize: 14,
-            fontWeight: FontWeight.w400,
-            height: 1.9),
       ),
     );
   }
 
-  /// text field change confirm new password
-  Widget changeConfirmNewPasswordTextField() {
+  Widget changePasswordCard() {
     return Container(
       width: double.infinity,
-      height: 50,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey),
-        borderRadius: BorderRadius.circular(6),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.only(left: 16, right: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Change Password",
+            style: TextStyle(
+              color: AppColors.textDark,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            "Keep your account secure by updating your password regularly.",
+            style: TextStyle(
+              color: AppColors.textGrey,
+              fontSize: 13,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 18),
+          passwordTextField(
+            controller: changeOldPasswordController,
+            hintText: "Old password",
+            obscureText: !isShowChangeOldPassword,
+            onToggle: () {
+              setState(() {
+                isShowChangeOldPassword = !isShowChangeOldPassword;
+              });
+            },
+            onChanged: (value) {
+              setState(() {
+                changeOldPassword = value;
+              });
+            },
+          ),
+          const SizedBox(height: 14),
+          passwordTextField(
+            controller: changeNewPasswordController,
+            hintText: "New password",
+            obscureText: !isShowChangeNewPassword,
+            onToggle: () {
+              setState(() {
+                isShowChangeNewPassword = !isShowChangeNewPassword;
+              });
+            },
+            onChanged: (value) {
+              setState(() {
+                changeNewPassword = value;
+              });
+            },
+          ),
+          const SizedBox(height: 14),
+          passwordTextField(
+            controller: changeConfirmNewPasswordController,
+            hintText: "Confirm new password",
+            obscureText: !isShowChangeConfirmNewPassword,
+            onToggle: () {
+              setState(() {
+                isShowChangeConfirmNewPassword =
+                !isShowChangeConfirmNewPassword;
+              });
+            },
+            onChanged: (value) {
+              setState(() {
+                changeConfirmNewPassword = value;
+              });
+            },
+          ),
+          const SizedBox(height: 18),
+          InkWell(
+            onTap: handleChangePassword,
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              height: 54,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [
+                    AppColors.primary,
+                    AppColors.primaryDark,
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.25),
+                    blurRadius: 14,
+                    offset: const Offset(0, 7),
+                  ),
+                ],
+              ),
+              child: const Text(
+                "Update Password",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget passwordTextField({
+    required TextEditingController controller,
+    required String hintText,
+    required bool obscureText,
+    required VoidCallback onToggle,
+    required Function(String) onChanged,
+  }) {
+    return Container(
+      height: 54,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.border,
+        ),
+      ),
       child: TextField(
-        obscureText: !isShowChangeConfirmNewPassword,
-        controller: changeConfirmNewPasswordController,
+        obscureText: obscureText,
+        controller: controller,
         keyboardType: TextInputType.text,
-        cursorColor: Colors.grey,
+        cursorColor: AppColors.primary,
         decoration: InputDecoration(
-          hintText: 'Enter Your Confirm New Password',
+          hintText: hintText,
           hintStyle: const TextStyle(
-            fontFamily: 'NunitoSans',
-            fontStyle: FontStyle.normal,
-            fontWeight: FontWeight.w400,
+            color: AppColors.textGrey,
             fontSize: 14,
           ),
           border: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          counterText: '',
-          suffixIcon: SizedBox(
-            width: 80,
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      isShowChangeConfirmNewPassword =
-                          !isShowChangeConfirmNewPassword;
-                    });
-                  },
-                  child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: (isShowChangeConfirmNewPassword == true)
-                          ? const Icon(Icons.visibility, color: Colors.green)
-                          : const Icon(
-                              Icons.visibility_off,
-                              color: Colors.green,
-                            )),
-                ),
-                const SizedBox(width: 20),
-                const Icon(Icons.lock_clock),
-              ],
+          prefixIcon: const Icon(
+            Icons.lock_rounded,
+            color: AppColors.textGrey,
+          ),
+          suffixIcon: GestureDetector(
+            onTap: onToggle,
+            child: Icon(
+              obscureText
+                  ? Icons.visibility_off_rounded
+                  : Icons.visibility_rounded,
+              color: AppColors.primary,
             ),
           ),
         ),
-        onChanged: (value) {
-          setState(() {
-            changeConfirmNewPassword = value;
-          });
-        },
+        onChanged: onChanged,
         style: const TextStyle(
-            color: Colors.black,
-            fontFamily: 'NunitoSans',
-            fontSize: 14,
-            fontWeight: FontWeight.w400,
-            height: 1.9),
+          color: AppColors.textDark,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          height: 1.4,
+        ),
       ),
     );
   }

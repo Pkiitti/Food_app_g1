@@ -4,6 +4,7 @@ enum SharedData {
   TOKEN,
   EMAIL,
   ID,
+  NAME,
 }
 class ConfigSharedPreferences {
   /// khởi tạo shared preference and reload
