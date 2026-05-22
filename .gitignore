@@ -1,0 +1,27 @@
+*.zip
+# Flutter
+Food-Order-App/.dart_tool/
+Food-Order-App/.idea/
+Food-Order-App/build/
+Food-Order-App/.flutter-plugins
+Food-Order-App/.flutter-plugins-dependencies
+Food-Order-App/.packages
+Food-Order-App/pubspec.lock
+
+# Android/Gradle
+Food-Order-App/android/.gradle/
+Food-Order-App/android/app/build/
+Food-Order-App/android/local.properties
+Food-Order-App/android/key.properties
+
+# Node.js backend
+Food-Order-BE/node_modules/
+Food-Order-BE/.env
+Food-Order-BE/npm-debug.log*
+Food-Order-BE/yarn-debug.log*
+Food-Order-BE/yarn-error.log*
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
