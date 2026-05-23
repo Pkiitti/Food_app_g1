@@ -47,7 +47,7 @@ class MyApp extends StatelessWidget {
     createMaterialColor(AppColors.primary);
 
     return MaterialApp(
-      title: 'Food Order App',
+      title: 'food_order_app',
       debugShowCheckedModeBanner: false,
       routes: routes,
       home: const SplashPage(),
